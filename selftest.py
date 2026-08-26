@@ -158,7 +158,7 @@ _d = {it.project_id: Delta(d30=99 - i, d24h=500) for i, it in enumerate(_items)}
 _fb = bot.facts_block(_items, 3, _items[2], _d)
 
 check("3-o'rin" in _fb, "facts_block: o'rin ko'rsatilgan")
-check("⬆️ OLDINDA" in _fb and "⬇️ ORTDA" in _fb,
+check("BIZDAN OLDINDA" in _fb and "BIZDAN ORTDA" in _fb,
       "facts_block: oldingi va ortdagi qatorlar bor")
 check("BIZ" in _fb, "facts_block: bizning qator harakat ro'yxatida")
 check(len(_fb) < 600, f"facts_block: ixcham ({len(_fb)} belgi)")
@@ -182,13 +182,13 @@ check("📍" in _fb4 and "🔥" not in _fb4,
 
 # 1-o'rinda turgan holat (oldinda hech kim yo'q)
 _fb5 = bot.facts_block(_items, 1, _items[0], _d)
-check("⬆️ OLDINDA" not in _fb5 and "⬇️ ORTDA" in _fb5,
+check("BIZDAN OLDINDA" not in _fb5 and "BIZDAN ORTDA" in _fb5,
       "facts_block: 1-o'rinda 'Oldinda' qatori chiqmaydi")
 
 # Yangilanish holati qatori
-check("o'zgarish yo'q" in bot.freshness_line(Delta(0, 0), _d3, datetime.now(TASHKENT)),
+check("yangi ovoz bo'lmadi" in bot.freshness_line(Delta(0, 0), _d3, datetime.now(TASHKENT)),
       "freshness_line: o'zgarish bo'lmasa aniq aytiladi")
-check("birinchi o'lchov" in bot.freshness_line(None, _d4, datetime.now(TASHKENT)),
+check("birinchi tekshiruv" in bot.freshness_line(None, _d4, datetime.now(TASHKENT)),
       "freshness_line: birinchi ishga tushish belgilanadi")
 
 # ------------------------------------------------- guruh xavfsizligi

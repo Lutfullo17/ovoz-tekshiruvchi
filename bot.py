@@ -212,13 +212,21 @@ def freshness_line(our_delta, deltas: dict, now: datetime) -> str:
     qolgan" holatini farqlab bo'lmaydi.
     """
     stamp = now.strftime("%H:%M")
+    head = f"🕘 {stamp} dagi holat"
+
     if our_delta is None or our_delta.d30 is None:
-        return f"🕘 {stamp} · birinchi o'lchov, taqqoslash uchun ma'lumot yo'q"
+        return f"{head}\nBu birinchi tekshiruv — taqqoslash uchun oldingi ma'lumot yo'q"
 
     district = sum(d.d30 for d in deltas.values() if d.d30 is not None)
     if district == 0:
-        return f"🕘 {stamp} · saytda o'zgarish yo'q (tumanda 0 ta yangi ovoz)"
-    return f"🕘 {stamp} · biz {our_delta.d30:+d} · tumanda jami {district:+d}"
+        return f"{head}\nOxirgi yarim soatda butun tumanda birorta yangi ovoz bo'lmadi"
+
+    ours = our_delta.d30
+    if ours <= 0:
+        return (f"{head}\nOxirgi yarim soatda bizga yangi ovoz qo'shilmadi "
+                f"(butun tumanga {district} ta qo'shildi)")
+    return (f"{head}\nOxirgi yarim soatda bizga {ours} ta yangi ovoz qo'shildi "
+            f"(butun tumanga {district} ta)")
 
 
 def night_summary(store: Storage, now: datetime, our_id: str) -> str | None:
