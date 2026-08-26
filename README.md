@@ -394,6 +394,49 @@ sudo journalctl -u ovoz-bot -f        # jonli log
 sudo systemctl disable --now ovoz-bot # to'xtatish
 ```
 
+## Windows kompyuterida ishlatish
+
+Uy internetingiz haqiqiy O'zbekiston IP sida bo'lgani uchun bu usul har doim
+ishlaydi. `bot.py` ni terminalda ochiq qoldirish shart emas — Task Scheduler
+har 30 daqiqada `run.bat` ni chaqiradi.
+
+```powershell
+schtasks /Create /TN "OvozMonitoring" /TR "C:\yo'l\openbudget-botun.bat" /SC MINUTE /MO 30 /F
+```
+
+So'ng muhim sozlamalar (noutbuk uchun):
+
+```powershell
+$t = Get-ScheduledTask -TaskName "OvozMonitoring"
+$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+       -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$s.WakeToRun = $true
+Set-ScheduledTask -TaskName "OvozMonitoring" -Settings $s
+```
+
+Nima uchun kerak:
+
+| Sozlama | Sababi |
+|---|---|
+| `AllowStartIfOnBatteries` | Sukut bo'yicha Windows batareyada vazifani **ishlatmaydi** |
+| `DontStopIfGoingOnBatteries` | Quvvat uzilsa yarim yo'lda to'xtatmasin |
+| `StartWhenAvailable` | O'tkazib yuborilgan ishga tushirishni keyin bajarsin |
+| `WakeToRun` | Kompyuter uxlagan bo'lsa uyg'otsin |
+
+Tekshirish va o'chirish:
+
+```powershell
+schtasks /Run   /TN "OvozMonitoring"     # darhol sinash
+Get-ScheduledTaskInfo -TaskName "OvozMonitoring"   # oxirgi natija (0 = muvaffaqiyat)
+schtasks /Delete /TN "OvozMonitoring" /F # o'chirish
+```
+
+> `WakeToRun` faqat **uyqu** (sleep) holatidan uyg'otadi. Kompyuter butunlay
+> o'chirilgan yoki gibernatsiyada bo'lsa ishlamaydi. Ishonchli bo'lishi uchun
+> quvvatga ulab qo'ying.
+
+---
+
 ## Docker
 
 ```bash
