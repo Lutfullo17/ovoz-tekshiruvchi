@@ -156,16 +156,16 @@ def facts_block(items, rank: int, our, deltas: dict) -> str:
     # Oldindagi ikkitasi — farq bilan
     ahead = items[max(0, i - 2):i]
     if ahead:
-        parts = [f"{to_latin(x.quarter)} +{fmt_votes(x.votes - our.votes)}"
+        parts = [f"{to_latin(x.quarter)} — {fmt_votes(x.votes - our.votes)} ovoz ko'p"
                  for x in reversed(ahead)]
-        blocks.append("⬆️ OLDINDA\n" + "\n".join(parts))
+        blocks.append("⬆️ BIZDAN OLDINDA\n" + "\n".join(parts))
 
     # Ortdagi ikkitasi — kim yaqinlashyapti
     behind = items[i + 1:i + 3]
     if behind:
-        parts = [f"{to_latin(x.quarter)} −{fmt_votes(our.votes - x.votes)}"
+        parts = [f"{to_latin(x.quarter)} — {fmt_votes(our.votes - x.votes)} ovoz kam"
                  for x in behind]
-        blocks.append("⬇️ ORTDA\n" + "\n".join(parts))
+        blocks.append("⬇️ BIZDAN ORTDA\n" + "\n".join(parts))
 
     # TOP-N ichida oxirgi 30 daqiqada kim qancha ovoz oldi
     top = list(enumerate(items[: CONFIG.top_n], start=1))
@@ -192,10 +192,10 @@ def facts_block(items, rank: int, our, deltas: dict) -> str:
         if tail:
             parts.append(f"...yana {tail} ta")
 
-        block = f"🔥 KIM HARAKAT QILYAPTI (30 daq)\n" + "\n".join(parts)
+        block = "🔥 OXIRGI YARIM SOATDA OLINGAN OVOZ\n" + "\n".join(parts)
         asleep = CONFIG.top_n - len(active)
         if asleep > 0:
-            block += f"\nQimirlamadi: {asleep} ta mahalla"
+            block += f"\nQolgan {asleep} ta mahalla ovoz olmadi"
         blocks.append(block)
     elif moves:
         blocks.append(f"😴 TOP-{CONFIG.top_n} da yangi ovoz yo'q")
