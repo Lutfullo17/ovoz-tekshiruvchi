@@ -96,14 +96,22 @@ def send_photo(png: bytes, caption: str) -> bool:
         return False
 
 
-def send_message(text: str) -> bool:
-    if not CONFIG.bot_token or not CONFIG.chat_id:
+def notify_admin(text: str) -> bool:
+    """
+    Texnik ogohlantirish — FAQAT adminga (ADMIN_CHAT_ID), guruhga emas.
+
+    Hisobot guruhi katta bo'lishi mumkin; u yerga xato xabarlari, loglar
+    yoki diagnostika chiqmasligi kerak. ADMIN_CHAT_ID sozlanmagan bo'lsa
+    ogohlantirish umuman yuborilmaydi, faqat logga yoziladi.
+    """
+    if not CONFIG.bot_token or not CONFIG.admin_chat_id:
+        log.warning("ADMIN_CHAT_ID sozlanmagan — ogohlantirish yuborilmadi: %s", text)
         return False
     url = TELEGRAM_API.format(token=CONFIG.bot_token, method="sendMessage")
     try:
         resp = httpx.post(
             url,
-            data={"chat_id": CONFIG.chat_id, "text": text[:4096]},
+            data={"chat_id": CONFIG.admin_chat_id, "text": text[:4096]},
             timeout=CONFIG.request_timeout,
         )
         resp.raise_for_status()
@@ -262,7 +270,7 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
         # Faqat 3-xatolikda bitta ogohlantirish — spam bo'lmasin
         if failures >= CONFIG.max_retries and store.get_state(STATE_ALERTED) != "1":
             if send:
-                send_message(
+                notify_admin(
                     f"⚠️ Monitoring: sayt {failures} marta ketma-ket javob bermadi. "
                     "Ma'lumot yangilanmayapti."
                 )

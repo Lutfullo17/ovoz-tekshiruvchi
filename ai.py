@@ -108,6 +108,31 @@ def _clean(text: str | None) -> str:
     return text.strip()
 
 
+#: Modelning javobi katta guruhga chiqadi, shuning uchun oldindan tekshiriladi.
+MAX_ANALYSIS = 400
+_FORBIDDEN = re.compile(
+    r"(https?://|www\.|t\.me/|@[A-Za-z0-9_]{3,}|<[a-zA-Z/]|\+998|\b\d{9,}\b)"
+)
+
+
+def is_safe(text: str) -> bool:
+    """
+    Model javobi guruhga yuborishga yaroqlimi?
+
+    Xabar 485 kishilik guruhga ketadi, shuning uchun kutilmagan narsa
+    (havola, telegram username, telefon raqami, HTML teg, juda uzun matn)
+    bo'lsa umuman yuborilmaydi — faqat kodda hisoblangan faktlar qoladi.
+    """
+    if not text or len(text) > MAX_ANALYSIS:
+        return False
+    if _FORBIDDEN.search(text):
+        return False
+    if text.count("\n") > 6:
+        return False
+    letters = sum(ch.isalpha() for ch in text)
+    return letters >= 20
+
+
 def paragraphs(text: str) -> str:
     """
     Har bir jumlani alohida qatorga chiqaradi va orasiga bo'sh qator qo'yadi —
@@ -176,9 +201,15 @@ def analyze(snapshot: dict) -> str | None:
                     continue
                 resp.raise_for_status()
                 text = _clean(resp.json()["choices"][0]["message"].get("content"))
-                if text:
+                if text and is_safe(text):
                     log.info("Groq tahlili tayyor (%s)", model)
-                    return text[:MAX_CAPTION]
+                    return text
+                if text:
+                    log.warning(
+                        "Groq javobi tekshiruvdan o'tmadi (%s), tashlab yuborildi: %.80s",
+                        model, text.replace("\n", " "),
+                    )
+                    return None  # shubhali matn — faktlar bilan cheklanamiz
                 log.warning("Groq bo'sh javob qaytardi (%s) — keyingi model", model)
             except Exception as exc:  # noqa: BLE001
                 log.warning("Groq xatosi (%s): %s", model, exc)

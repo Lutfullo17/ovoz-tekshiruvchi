@@ -19,6 +19,7 @@ uchun ishlatilmaydi.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -98,8 +99,27 @@ _TRANSLIT = {
 }
 
 
+def sanitize(text: str, limit: int = 40) -> str:
+    """
+    Saytdan kelgan matnni xabarga qo'yishdan oldin tozalaydi.
+
+    Mahalla nomlarini odamlar kiritadi, ya'ni ular ishonchsiz manba.
+    Nom katta guruhga yuboriladigan xabarga tushgani uchun havola,
+    boshqaruv belgilari va haddan tashqari uzunlik olib tashlanadi.
+    """
+    if not text:
+        return "—"
+    cleaned = "".join(ch for ch in text if ch.isprintable() and ch not in "<>")
+    cleaned = re.sub(r"(https?://\S+|www\.\S+|t\.me/\S+|@\w+)", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return "—"
+    return cleaned[:limit].strip()
+
+
 def to_latin(text: str) -> str:
-    """Кирилл -> lotin (Юқори Санчиқул -> Yuqori Sanchiqul)."""
+    """Кирилл -> lotin (Юқори Санчиқул -> Yuqori Sanchiqul). Matn tozalanadi."""
+    text = sanitize(text)
     out = []
     for ch in text:
         lower = ch.lower()

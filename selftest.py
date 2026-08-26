@@ -191,6 +191,34 @@ check("o'zgarish yo'q" in bot.freshness_line(Delta(0, 0), _d3, datetime.now(TASH
 check("birinchi o'lchov" in bot.freshness_line(None, _d4, datetime.now(TASHKENT)),
       "freshness_line: birinchi ishga tushish belgilanadi")
 
+# ------------------------------------------------- guruh xavfsizligi
+# Xabar katta guruhga ketadi — kutilmagan narsa chiqmasligi kerak.
+from ai import is_safe
+from renderer import sanitize
+
+check(is_safe("Xalqobod 58 ovoz bilan yetakchi. Ukrach ortda qolmoqda."),
+      "is_safe: oddiy tahlil o'tadi")
+check(not is_safe("Batafsil https://spam.example.com da"), "is_safe: havola bloklanadi")
+check(not is_safe("Yozing @spamchi ga"), "is_safe: telegram username bloklanadi")
+check(not is_safe("<b>qalin</b> matn bo'lsin bu yerda"), "is_safe: HTML teg bloklanadi")
+check(not is_safe("Qo'ng'iroq qiling +998901234567"), "is_safe: telefon raqami bloklanadi")
+check(not is_safe("A" * 500), "is_safe: juda uzun matn bloklanadi")
+check(not is_safe("qisqa"), "is_safe: mazmunsiz kalta matn bloklanadi")
+check(not is_safe(""), "is_safe: bo'sh matn bloklanadi")
+
+check(sanitize("Mahalla https://spam.uz") == "Mahalla", "sanitize: havola olib tashlanadi")
+check(sanitize("Mahalla @kanal") == "Mahalla", "sanitize: username olib tashlanadi")
+check("<" not in sanitize("Mahalla <b>x</b>"), "sanitize: burchak qavslar olib tashlanadi")
+check(len(sanitize("A" * 200)) <= 40, "sanitize: uzunlik cheklanadi")
+check(sanitize("") == "—", "sanitize: bo'sh nom '—' bo'ladi")
+
+check(hasattr(bot, "notify_admin") and not hasattr(bot, "send_message"),
+      "texnik ogohlantirish faqat notify_admin orqali (guruhga yo'l yo'q)")
+check("admin_chat_id" in bot.notify_admin.__code__.co_names,
+      "notify_admin ADMIN_CHAT_ID ga yuboradi, CHAT_ID ga emas")
+check("chat_id" in bot.send_photo.__code__.co_names,
+      "send_photo hisobotni CHAT_ID ga yuboradi")
+
 # ------------------------------------------------------------------ natija
 print()
 failed = [label for ok, label in results if not ok]
