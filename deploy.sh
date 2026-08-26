@@ -21,7 +21,8 @@ err()  { printf '  \033[31mXATO\033[0m  %s\n' "$*"; }
 # ---------------------------------------------------------------- 1. Tarmoq
 say "1/5  Saytga ulanish tekshirilmoqda"
 
-CODE=$(curl -sS -m 25 -o /dev/null -w '%{http_code}' "$API_URL" 2>/dev/null || echo "000")
+CODE=$(curl -sS -m 25 -o /dev/null -w '%{http_code}' "$API_URL" 2>/dev/null | tail -c 3)
+[ -z "$CODE" ] && CODE="000"
 if [ "$CODE" = "200" ]; then
     ok "sayt javob berdi (HTTP 200) — bu server O'zbekistonda"
 else
@@ -32,7 +33,9 @@ else
     echo
     IP=$(curl -sS -m 10 https://api.ipify.org 2>/dev/null || echo "?")
     echo "  Server IP: $IP"
-    curl -sS -m 10 "https://ipapi.co/$IP/country_name/" 2>/dev/null | sed 's/^/  Davlat: /' || true
+    curl -sS -m 10 "http://ip-api.com/line/?fields=country,city,isp" 2>/dev/null | sed 's/^/  /' || true
+    echo
+    echo "  Sabab aniqlash uchun:  bash diagnose.sh"
     echo
     exit 1
 fi
