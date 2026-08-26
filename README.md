@@ -343,6 +343,57 @@ raqamlar to'liq chiqadi.
 **Actions** → **OpenBudget monitoring** → o'ng yuqoridagi **···** →
 **Disable workflow**. Yoki repo'ni o'chirib yuboring.
 
+---
+
+## ⚠️ Qayerda ishlatish mumkin
+
+`new.openbudget.uz` **faqat O'zbekiston IP lariga javob beradi.** 18 ta chet el
+tugunidan tekshirildi (check-host.net) — 17 tasi "connection timed out":
+
+| Hudud | Natija |
+|---|---|
+| AQSh (Los-Anjeles, Mayami) | ❌ timeout |
+| Yevropa (Vena, Xelsinki, Parij, Amsterdam, Buxarest, Belgrad) | ❌ timeout |
+| MDH (Sankt-Peterburg, Kiyev, Xmelnitskiy) | ❌ timeout |
+| Osiyo (Dehli, Kolkata, Jakarta, Isfahon, Sheroz, Netanya) | ❌ timeout |
+| O'zbekiston | ✅ HTTP 200 |
+
+Shuning uchun bot **O'zbekiston ichidagi mashinada** ishlashi shart:
+
+* ✅ O'zbekistondagi VPS (eskiz, ps.uz, ahost.uz va h.k.)
+* ✅ Uy kompyuteri (Windows Task Scheduler yoki `python bot.py`)
+* ✅ Android telefon + Termux (mobil internet UZ IP beradi)
+* ❌ GitHub Actions, Railway, Render, Fly.io, Vercel, Heroku — serverlari chet elda
+
+Repodagi `.github/workflows/monitor.yml` shu sababli **cronsiz** qoldirilgan —
+faqat qo'lda ishga tushirish uchun.
+
+## O'zbekistondagi serverga o'rnatish
+
+```bash
+git clone https://github.com/Lutfullo17/ovoz-tekshiruvchi.git
+cd ovoz-tekshiruvchi
+bash deploy.sh
+```
+
+Skript ketma-ket bajaradi:
+
+1. **Saytga ulanishni tekshiradi** — server chet elda bo'lsa shu yerda
+   to'xtaydi va IP bilan davlatni ko'rsatadi
+2. Alohida `venv` yaratib kutubxonalarni o'rnatadi (tizim Python iga tegmaydi)
+3. `.env` ni so'rab to'ldiradi (huquqlar `600`)
+4. Telegramga yubormasdan sinab ko'radi
+5. `ovoz-bot` nomli systemd xizmatini yaratib ishga tushiradi
+
+Serverda boshqa loyihalar bo'lsa ularga tegmaydi — o'z papkasi, o'z venv i,
+alohida nomdagi xizmat.
+
+```bash
+sudo systemctl status ovoz-bot        # holat
+sudo journalctl -u ovoz-bot -f        # jonli log
+sudo systemctl disable --now ovoz-bot # to'xtatish
+```
+
 ## Docker
 
 ```bash
