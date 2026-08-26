@@ -54,6 +54,36 @@ jobs:
           path: history.db
           key: history-db-${{ github.run_id }}
 
-      - name: Xatolik bo'lsa logni ko'rsatish
+      # Xato bo'lsa sababini Telegramga yuboradi — Actions logini ochmasdan
+      # nima bo'lganini bilish uchun.
+      - name: Xatolikni aniqlash va yuborish
         if: failure()
-        run: cat bot.log || true
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          echo "--- bot.log ---"
+          cat bot.log 2>/dev/null || echo "(bot.log yo'q)"
+
+          echo "--- saytga ulanish tekshiruvi ---"
+          NET=$(curl -sS -m 25 -o /dev/null \
+            -w "HTTP %{http_code} / %{time_total}s" \
+            "https://new.openbudget.uz/api/v2/info/board/55?stage=PASSED&page=0&size=5&regionId=8&districtId=93" \
+            2>&1 || echo "ULANIB BO'LMADI")
+          echo "$NET"
+
+          IP=$(curl -sS -m 10 https://api.ipify.org 2>/dev/null || echo "?")
+          GEO=$(curl -sS -m 10 "https://ipapi.co/$IP/country_name/" 2>/dev/null || echo "?")
+
+          TEXT="GitHub Actions xatosi
+
+          Sayt: $NET
+          Runner IP: $IP ($GEO)
+
+          Log:
+          $(tail -c 600 bot.log 2>/dev/null || echo '(log yo_q)')"
+
+          curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$CHAT_ID" \
+            --data-urlencode "text=$TEXT" > /dev/null
+          echo "Xato haqida Telegramga yuborildi"
