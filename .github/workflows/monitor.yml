@@ -1,0 +1,59 @@
+name: OpenBudget monitoring
+
+on:
+  schedule:
+    # Har 30 daqiqada. Vaqt UTC da — bot o'zi Toshkent vaqtiga o'giradi.
+    # Kechasi ham ishlaydi: ma'lumot yig'iladi, lekin xabar yuborilmaydi
+    # (QUIET_START/QUIET_END sozlamalari bo'yicha).
+    - cron: "*/30 * * * *"
+  workflow_dispatch:        # "Run workflow" tugmasi bilan qo'lda ishga tushirish
+
+# Bir vaqtda bitta ishlasin — baza keshiga ikki tomondan yozilmasin
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Kutubxonalarni o'rnatish
+        run: pip install -r requirements.txt
+
+      # Oldingi ishga tushishdagi bazani tiklaymiz — deltalar shu orqali
+      # hisoblanadi. Birinchi safar kesh bo'sh bo'ladi, bu normal.
+      - name: Bazani keshdan tiklash
+        uses: actions/cache/restore@v4
+        with:
+          path: history.db
+          key: history-db-${{ github.run_id }}
+          restore-keys: history-db-
+
+      - name: Tekshirish va yuborish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PROJECT_ID: ${{ vars.PROJECT_ID || '055530954008' }}
+          TZ: Asia/Tashkent
+        run: python bot.py --once
+
+      - name: Bazani keshga saqlash
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: history.db
+          key: history-db-${{ github.run_id }}
+
+      - name: Xatolik bo'lsa logni ko'rsatish
+        if: failure()
+        run: cat bot.log || true

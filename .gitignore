@@ -1,0 +1,8 @@
+.env
+*.db
+*.log
+__pycache__/
+*.pyc
+test_output.png
+final_check.png
+_fonttest.png

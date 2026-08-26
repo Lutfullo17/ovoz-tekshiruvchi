@@ -1,0 +1,458 @@
+"""
+OpenBudget monitoring boti.
+
+Har `INTERVAL_MINUTES` daqiqada:
+  1. new.openbudget.uz dan tuman bo'yicha barcha tashabbuslarni oladi
+  2. ovoz bo'yicha saralab TOP-N ni ajratadi
+  3. snapshot'ni SQLite ga yozadi (delta hisoblash uchun)
+  4. jadvalni PNG rasm qilib chizadi
+  5. Groq'dan qisqa tahlil oladi va Telegram guruhga sendPhoto qiladi
+
+Rejimlar:
+    python bot.py                 # doimiy ishlash (scheduler)
+    python bot.py --once          # bir marta to'liq sikl (Telegramga yuboradi)
+    python bot.py --once --dry-run # bir marta, yubormasdan, terminalga chiqaradi
+    python bot.py --render-only   # faqat rasm chizib faylga saqlaydi
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import httpx
+
+import ai
+from config import CONFIG, TASHKENT
+from renderer import build_rows, fmt_votes, render, to_latin
+from scraper import ScrapeError, fetch_sorted, find_project
+from storage import Storage
+
+log = logging.getLogger("bot")
+
+TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
+MAX_CAPTION = 1024
+STATE_FAILURES = "consecutive_failures"
+STATE_ALERTED = "failure_alert_sent"
+STATE_WAS_QUIET = "was_quiet"
+
+# Caption'da nechta "harakatdagi" mahalla nomi ko'rsatiladi (qolgani "+N ta yana")
+MOVERS_SHOWN = 6
+
+
+# --------------------------------------------------------------------------
+# Logging
+# --------------------------------------------------------------------------
+
+def setup_logging() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+    fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler(CONFIG.log_path, encoding="utf-8")
+    file_handler.setFormatter(fmt)
+    root.addHandler(file_handler)
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
+
+# --------------------------------------------------------------------------
+# Telegram
+# --------------------------------------------------------------------------
+
+def send_photo(png: bytes, caption: str) -> bool:
+    if not CONFIG.bot_token or not CONFIG.chat_id:
+        log.error("BOT_TOKEN yoki CHAT_ID sozlanmagan — yuborilmadi")
+        return False
+    url = TELEGRAM_API.format(token=CONFIG.bot_token, method="sendPhoto")
+    try:
+        resp = httpx.post(
+            url,
+            data={"chat_id": CONFIG.chat_id, "caption": caption[:MAX_CAPTION]},
+            files={"photo": ("reyting.png", png, "image/png")},
+            timeout=CONFIG.request_timeout,
+        )
+        if resp.status_code != 200:
+            # Telegram sababni javob tanasida yozadi — log'da ko'rinsin
+            log.error("Telegram javobi: %s", resp.text[:300])
+        resp.raise_for_status()
+        log.info("Rasm yuborildi (%d bayt, caption %d belgi)", len(png), len(caption))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.error("Telegramga yuborishda xato: %s", exc)
+        return False
+
+
+def send_message(text: str) -> bool:
+    if not CONFIG.bot_token or not CONFIG.chat_id:
+        return False
+    url = TELEGRAM_API.format(token=CONFIG.bot_token, method="sendMessage")
+    try:
+        resp = httpx.post(
+            url,
+            data={"chat_id": CONFIG.chat_id, "text": text[:4096]},
+            timeout=CONFIG.request_timeout,
+        )
+        resp.raise_for_status()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.error("Telegram xabar xatosi: %s", exc)
+        return False
+
+
+# --------------------------------------------------------------------------
+# Kechasi hisoboti
+# --------------------------------------------------------------------------
+
+def _neighbour(items, rank: int, deltas: dict, offset: int, our) -> dict | None:
+    """Reytingda bizdan bitta oldin (-1) yoki keyin (+1) turgan loyiha."""
+    index = rank - 1 + offset
+    if not 0 <= index < len(items):
+        return None
+    it = items[index]
+    d = deltas.get(it.project_id)
+    return {
+        "nom": to_latin(it.quarter),
+        "orin": index + 1,
+        "ovoz": it.votes,
+        "farq": abs(it.votes - our.votes),
+        "oxirgi_30_daqiqa": d.d30 if d else None,
+    }
+
+
+def facts_block(items, rank: int, our, deltas: dict) -> str:
+    """
+    Caption'ning asosiy qismi — kodda hisoblangan aniq raqamlar.
+
+    Model umumiy gap yozib qo'ysa ham ("barqaror turibmiz", "e'tibor qaratish
+    kerak"), guruh baribir kerakli faktni ko'radi: o'rin, ovoz, kim yaqin,
+    kim harakat qilyapti.
+    """
+    i = rank - 1
+    # Har bir blok: sarlavha + ostida ma'lumot. Bloklar bo'sh qator bilan ajraladi.
+    blocks = [f"📍 BIZ: {rank}-o'rin · {fmt_votes(our.votes)} ovoz"]
+
+    # Oldindagi ikkitasi — farq bilan
+    ahead = items[max(0, i - 2):i]
+    if ahead:
+        parts = [f"{to_latin(x.quarter)} +{fmt_votes(x.votes - our.votes)}"
+                 for x in reversed(ahead)]
+        blocks.append("⬆️ OLDINDA\n" + "\n".join(parts))
+
+    # Ortdagi ikkitasi — kim yaqinlashyapti
+    behind = items[i + 1:i + 3]
+    if behind:
+        parts = [f"{to_latin(x.quarter)} −{fmt_votes(our.votes - x.votes)}"
+                 for x in behind]
+        blocks.append("⬇️ ORTDA\n" + "\n".join(parts))
+
+    # TOP-N ichida oxirgi 30 daqiqada kim qancha ovoz oldi
+    top = list(enumerate(items[: CONFIG.top_n], start=1))
+    moves = [
+        (pos, it, deltas[it.project_id].d30)
+        for pos, it in top
+        if deltas.get(it.project_id) and deltas[it.project_id].d30
+    ]
+    active = sorted((m for m in moves if m[2] > 0), key=lambda x: x[2], reverse=True)
+
+    if active:
+        shown = active[:MOVERS_SHOWN]
+        # Bizning qator ro'yxatga tushmay qolsa ham doim ko'rsatiladi —
+        # guruh o'zini boshqalar bilan solishtira olishi kerak.
+        ours = next((m for m in active if m[1].project_id == CONFIG.project_id), None)
+        if ours and ours not in shown:
+            shown = shown[:MOVERS_SHOWN - 1] + [ours]
+
+        parts = []
+        for pos, it, d in shown:
+            label = "BIZ" if it.project_id == CONFIG.project_id else to_latin(it.quarter)
+            parts.append(f"{pos}. {label} +{d}")
+        tail = len(active) - len(shown)
+        if tail:
+            parts.append(f"...yana {tail} ta")
+
+        block = f"🔥 KIM HARAKAT QILYAPTI (30 daq)\n" + "\n".join(parts)
+        asleep = CONFIG.top_n - len(active)
+        if asleep > 0:
+            block += f"\nQimirlamadi: {asleep} ta mahalla"
+        blocks.append(block)
+    elif moves:
+        blocks.append(f"😴 TOP-{CONFIG.top_n} da yangi ovoz yo'q")
+
+    return "\n\n".join(blocks)
+
+
+def freshness_line(our_delta, deltas: dict, now: datetime) -> str:
+    """
+    Oxirgi qator: ma'lumot qachon olingani va nima o'zgargani.
+
+    Sayt ovozlarni real vaqtda emas, to'p-to'p yangilaydi — ba'zan 30 daqiqada
+    umuman o'zgarish bo'lmaydi. Bu qatorsiz "sayt turibdi" bilan "bot qotib
+    qolgan" holatini farqlab bo'lmaydi.
+    """
+    stamp = now.strftime("%H:%M")
+    if our_delta is None or our_delta.d30 is None:
+        return f"🕘 {stamp} · birinchi o'lchov, taqqoslash uchun ma'lumot yo'q"
+
+    district = sum(d.d30 for d in deltas.values() if d.d30 is not None)
+    if district == 0:
+        return f"🕘 {stamp} · saytda o'zgarish yo'q (tumanda 0 ta yangi ovoz)"
+    return f"🕘 {stamp} · biz {our_delta.d30:+d} · tumanda jami {district:+d}"
+
+
+def night_summary(store: Storage, now: datetime, our_id: str) -> str | None:
+    """06:00 dan keyingi birinchi xabar uchun: jim vaqtdagi o'sish."""
+    end = now.replace(hour=CONFIG.quiet_end, minute=0, second=0, microsecond=0)
+    if end > now:
+        end -= timedelta(days=1)
+    start = end.replace(hour=CONFIG.quiet_start, minute=0, second=0, microsecond=0)
+    if start >= end:
+        start -= timedelta(days=1)
+
+    before, after = store.votes_between(start, end)
+    if not before or not after or our_id not in before or our_id not in after:
+        return None
+
+    our_growth = after[our_id] - before[our_id]
+    # Kechasi eng ko'p o'sgan raqib (biz emas)
+    rivals = [
+        (pid, after[pid] - before[pid])
+        for pid in after
+        if pid != our_id and pid in before
+    ]
+    if not rivals:
+        return f"Kechasi ({CONFIG.quiet_start:02d}:00–{CONFIG.quiet_end:02d}:00): biz {our_growth:+d}"
+
+    top_pid, top_growth = max(rivals, key=lambda x: x[1])
+    return (
+        f"Kechasi ({CONFIG.quiet_start:02d}:00–{CONFIG.quiet_end:02d}:00): "
+        f"biz {our_growth:+d}, eng faol raqib {top_growth:+d}"
+    )
+
+
+# --------------------------------------------------------------------------
+# Asosiy sikl
+# --------------------------------------------------------------------------
+
+def run_cycle(send: bool = True, render_path: Path | None = None,
+              analysis: bool = True) -> bool:
+    store = Storage(CONFIG.db_path)
+    now = datetime.now(TASHKENT)
+
+    # ---- 1. Ma'lumot ----
+    try:
+        items = fetch_sorted()
+    except ScrapeError as exc:
+        failures = int(store.get_state(STATE_FAILURES, "0")) + 1
+        store.set_state(STATE_FAILURES, str(failures))
+        log.error("Ma'lumot olinmadi (ketma-ket %d-marta): %s", failures, exc)
+        # Faqat 3-xatolikda bitta ogohlantirish — spam bo'lmasin
+        if failures >= CONFIG.max_retries and store.get_state(STATE_ALERTED) != "1":
+            if send:
+                send_message(
+                    f"⚠️ Monitoring: sayt {failures} marta ketma-ket javob bermadi. "
+                    "Ma'lumot yangilanmayapti."
+                )
+            store.set_state(STATE_ALERTED, "1")
+        return False
+
+    if store.get_state(STATE_FAILURES, "0") != "0":
+        log.info("Aloqa tiklandi")
+    store.set_state(STATE_FAILURES, "0")
+    store.set_state(STATE_ALERTED, "0")
+
+    # ---- 2. Bizning loyiha (FAQAT ID bo'yicha) ----
+    found = find_project(items, CONFIG.project_id)
+    if not found:
+        log.error(
+            "PROJECT_ID=%s ro'yxatda topilmadi (%d ta yozuv tekshirildi). "
+            ".env dagi ID ni tekshiring.",
+            CONFIG.project_id, len(items),
+        )
+        return False
+    rank, our = found
+
+    # ---- 3. Snapshot va delta ----
+    snapshot_id = store.save_snapshot(now, items)
+    store.prune()  # baza cheksiz o'smasin (24 soatlik delta saqlanadi)
+    current = {it.project_id: it.votes for it in items}
+    deltas = store.deltas(snapshot_id, now, current)
+    prev_rank = store.last_rank(CONFIG.project_id, snapshot_id)
+
+    # ---- 4. Rasm ----
+    rows = build_rows(items, CONFIG.project_id, CONFIG.top_n)
+    timestamp = now.strftime("%d.%m.%Y, %H:%M")
+    png = render(rows, timestamp, CONFIG.district_label)
+
+    if render_path:
+        render_path.write_bytes(png)
+        log.info("Rasm saqlandi: %s (%d bayt, %d qator)",
+                 render_path, len(png), len(rows))
+
+    # --render-only: faqat dizaynni tekshirish — Groq va caption kerak emas
+    if not analysis:
+        return True
+
+    # ---- 5. Tahlil uchun ma'lumot ----
+    our_delta = deltas.get(CONFIG.project_id)
+    payload = {
+        "biz": {
+            "nom": to_latin(our.quarter),
+            "ovoz": our.votes,
+            "orin": rank,
+            "jami": len(items),
+            "oxirgi_30_daqiqa": our_delta.d30 if our_delta else None,
+            "oxirgi_24_soat": our_delta.d24h if our_delta else None,
+        },
+        "orin_ozgardi": (
+            f"{prev_rank} -> {rank}" if prev_rank is not None and prev_rank != rank else None
+        ),
+        # Model "eng faol" bilan "eng yaqin" ni chalkashtirmasligi uchun
+        # ikkalasi ham oldindan hisoblab beriladi.
+        "eng_yaqin_ortdagi": _neighbour(items, rank, deltas, +1, our),
+        "eng_yaqin_oldingi": _neighbour(items, rank, deltas, -1, our),
+        "top15_harakati": sorted(
+            (
+                {
+                    "orin": pos,
+                    "nom": "BIZ" if it.project_id == CONFIG.project_id
+                           else to_latin(it.quarter),
+                    "oxirgi_30_daqiqa": deltas[it.project_id].d30,
+                }
+                for pos, it in enumerate(items[: CONFIG.top_n], start=1)
+                if deltas.get(it.project_id) and deltas[it.project_id].d30
+            ),
+            key=lambda x: x["oxirgi_30_daqiqa"], reverse=True,
+        ),
+        "top": [
+            {
+                "orin": i + 1,
+                "nom": to_latin(it.quarter),
+                "ovoz": it.votes,
+                "oxirgi_30_daqiqa": deltas[it.project_id].d30,
+                "oxirgi_24_soat": deltas[it.project_id].d24h,
+            }
+            for i, it in enumerate(items[: CONFIG.top_n])
+        ],
+    }
+
+    # ---- 6. Jim vaqt ----
+    quiet = CONFIG.is_quiet(now.hour)
+    if quiet:
+        store.set_state(STATE_WAS_QUIET, "1")
+        log.info("Jim vaqt (%02d:00) — ma'lumot saqlandi, xabar yuborilmadi", now.hour)
+        return True
+
+    # ---- 7. Caption ----
+    lines: list[str] = []
+    if store.get_state(STATE_WAS_QUIET) == "1":
+        summary = night_summary(store, now, CONFIG.project_id)
+        if summary:
+            lines.append(f"🌙 {summary}")
+        store.set_state(STATE_WAS_QUIET, "0")
+
+    if prev_rank is not None and prev_rank != rank:
+        arrow = "⬆️" if rank < prev_rank else "⬇️"
+        lines.append(f"{arrow} O'RIN O'ZGARDI: {prev_rank} → {rank}")
+
+    # Aniq raqamlar — kodda hisoblanadi, modelga bog'liq emas
+    lines.append(facts_block(items, rank, our, deltas))
+
+    # Groq'dan 2 ta qisqa jumla — faqat aytadigan gap bo'lsa.
+    # Hech narsa o'zgarmagan bo'lsa model bo'sh jumla to'qiydi, shuning uchun
+    # umuman chaqirilmaydi: faktlar bloki o'zi yetarli.
+    district_delta = sum(d.d30 for d in deltas.values() if d.d30 is not None)
+    first_run = our_delta is None or our_delta.d30 is None
+    if first_run or district_delta != 0:
+        analysis = ai.analyze(payload)
+        if analysis:
+            lines.append(ai.paragraphs(analysis))
+    else:
+        log.info("O'zgarish yo'q — Groq tahlili o'tkazib yuborildi")
+
+    # Yangilanish holati — "sayt o'zgarmadi" bilan "bot qotib qoldi" ni ajratish uchun
+    lines.append(freshness_line(our_delta, deltas, now))
+
+    caption = "\n\n".join(lines)
+    if len(caption) > MAX_CAPTION:
+        caption = caption[: MAX_CAPTION - 1].rstrip() + "…"
+
+    # ---- 8. Yuborish ----
+    if send:
+        send_photo(png, caption)
+    else:
+        print("\n--- CAPTION ---")
+        print(caption)
+        print("--- /CAPTION ---\n")
+        print(f"Rasm: {len(png)} bayt | {our.quarter}: {our.votes} ovoz, "
+              f"{rank}/{len(items)}-o'rin")
+    return True
+
+
+# --------------------------------------------------------------------------
+# Scheduler
+# --------------------------------------------------------------------------
+
+def run_forever() -> None:
+    from apscheduler.schedulers.blocking import BlockingScheduler
+
+    scheduler = BlockingScheduler(timezone=TASHKENT)
+    scheduler.add_job(
+        run_cycle,
+        "interval",
+        minutes=CONFIG.interval_minutes,
+        next_run_time=datetime.now(TASHKENT),
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=300,
+    )
+    log.info(
+        "Bot ishga tushdi | interval: %d daq | jim vaqt: %02d:00–%02d:00 | loyiha: %s",
+        CONFIG.interval_minutes, CONFIG.quiet_start, CONFIG.quiet_end, CONFIG.project_id,
+    )
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        log.info("To'xtatildi")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="OpenBudget monitoring boti")
+    parser.add_argument("--once", action="store_true",
+                        help="bir marta ishlab to'xtaydi")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="--once bilan: Telegramga yubormaydi, terminalga chiqaradi")
+    parser.add_argument("--render-only", action="store_true",
+                        help="faqat rasm chizib faylga saqlaydi")
+    parser.add_argument("-o", "--output", default="test_output.png",
+                        help="--render-only uchun fayl nomi")
+    args = parser.parse_args()
+
+    setup_logging()
+
+    if args.render_only:
+        ok = run_cycle(send=False, render_path=Path(args.output), analysis=False)
+        return 0 if ok else 1
+    if args.once:
+        ok = run_cycle(send=not args.dry_run)
+        return 0 if ok else 1
+
+    run_forever()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

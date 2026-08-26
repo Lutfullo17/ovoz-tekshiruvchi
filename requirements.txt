@@ -1,0 +1,8 @@
+httpx>=0.27
+Pillow>=10.0
+APScheduler>=3.10
+tzdata>=2024.1 ; sys_platform == "win32"
+
+# Ixtiyoriy — API to'g'ridan-to'g'ri ishlamay qolsa zaxira skreyper uchun:
+#   pip install playwright && playwright install chromium
+# playwright>=1.44

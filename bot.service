@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenBudget monitoring boti (Quyi Tegana)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openbudget
+Group=openbudget
+WorkingDirectory=/opt/openbudget-bot
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/openbudget-bot/.env
+ExecStart=/opt/openbudget-bot/.venv/bin/python /opt/openbudget-bot/bot.py
+Restart=always
+RestartSec=30
+
+# Xavfsizlik
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/openbudget-bot
+
+[Install]
+WantedBy=multi-user.target
