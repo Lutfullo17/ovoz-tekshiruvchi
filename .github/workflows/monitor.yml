@@ -1,12 +1,17 @@
 name: OpenBudget monitoring
 
+# DIQQAT: cron o'chirilgan.
+#
+# new.openbudget.uz O'zbekistondan tashqaridagi IP larga javob bermaydi
+# (18 ta chet el tugunidan tekshirildi — 17 tasi "connection timed out",
+# bittasi javobsiz). GitHub runnerlari AQSh/Yevropada, shuning uchun bu
+# workflow saytga ulana olmaydi.
+#
+# Ish faqat O'zbekiston ichidagi mashinada bajarilishi kerak:
+# uy kompyuteri (Windows Task Scheduler), UZ VPS yoki self-hosted runner.
+# Batafsil: README > "Qayerda ishlatish mumkin".
 on:
-  schedule:
-    # Har 30 daqiqada. Vaqt UTC da — bot o'zi Toshkent vaqtiga o'giradi.
-    # Kechasi ham ishlaydi: ma'lumot yig'iladi, lekin xabar yuborilmaydi
-    # (QUIET_START/QUIET_END sozlamalari bo'yicha).
-    - cron: "*/30 * * * *"
-  workflow_dispatch:        # "Run workflow" tugmasi bilan qo'lda ishga tushirish
+  workflow_dispatch:        # faqat qo'lda — sinov uchun
 
 # Bir vaqtda bitta ishlasin — baza keshiga ikki tomondan yozilmasin
 concurrency:
