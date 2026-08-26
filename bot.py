@@ -27,7 +27,7 @@ import httpx
 import ai
 from config import CONFIG, TASHKENT
 from renderer import build_rows, fmt_votes, render, to_latin
-from scraper import ScrapeError, fetch_sorted, find_project
+from scraper import ScrapeError, fetch_budget, fetch_sorted, find_project, winners_count
 from storage import Storage
 
 log = logging.getLogger("bot")
@@ -309,7 +309,13 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     prev_rank = store.last_rank(CONFIG.project_id, snapshot_id)
 
     # ---- 4. Rasm ----
-    rows = build_rows(items, CONFIG.project_id, CONFIG.top_n)
+    # Budjet kampaniya davomida o'zgaradi (26.08.2026 da 24,72 -> 31,671 mlrd),
+    # shuning uchun g'oliblar soni har safar qaytadan hisoblanadi.
+    budget = fetch_budget()
+    winners = winners_count(items, budget)
+    if winners:
+        log.info("Budjet %s so'm -> %d ta g'olib", f"{budget:,}".replace(",", " "), winners)
+    rows = build_rows(items, CONFIG.project_id, CONFIG.top_n, winners=winners)
     timestamp = now.strftime("%d.%m.%Y, %H:%M")
     png = render(rows, timestamp, CONFIG.district_label)
 

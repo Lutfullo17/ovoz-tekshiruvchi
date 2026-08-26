@@ -216,6 +216,50 @@ def fetch_sorted(retries: int | None = None) -> list[Initiative]:
     raise ScrapeError(f"Ma'lumot olinmadi: {last_error}")
 
 
+def fetch_budget() -> int | None:
+    """
+    Tumanga ajratilgan umumiy mablag'.
+
+    Bu raqam kampaniya davomida o'zgarishi mumkin — 26.08.2026 da Urgut
+    tumani uchun 24,72 mlrd dan 31,671 mlrd so'mga oshdi va g'oliblar soni
+    15 tadan 19 taga ko'paydi. Shuning uchun qat'iy yozib qo'yilmaydi,
+    har safar saytdan o'qiladi.
+
+    Olib bo'lmasa None qaytaradi — chaqiruvchi chegarasiz davom etadi.
+    """
+    url = (f"/api/v2/info/statistics/board-budget-sum/{CONFIG.board_id}"
+           f"?regionId={CONFIG.region_id}&districtId={CONFIG.district_id}"
+           f"&_={int(time.time() * 1000)}")
+    try:
+        with httpx.Client(base_url=CONFIG.api_base, timeout=CONFIG.request_timeout,
+                          headers={"User-Agent": USER_AGENT, "Accept": "application/json",
+                                   "Referer": CONFIG.page_url},
+                          follow_redirects=True) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            value = int(resp.json().get("budgetSum") or 0)
+            return value or None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Budjet miqdori olinmadi: %s", exc)
+        return None
+
+
+def winners_count(items: list[Initiative], budget: int | None) -> int | None:
+    """
+    Budjetga nechta loyiha sig'adi (ovoz bo'yicha yuqoridan pastga).
+
+    G'oliblar reyting bo'yicha, mablag' tugaguncha aniqlanadi.
+    """
+    if not budget:
+        return None
+    spent = 0
+    for index, item in enumerate(items):
+        if spent + item.amount > budget:
+            return index
+        spent += item.amount
+    return len(items)
+
+
 def find_project(items: list[Initiative], project_id: str) -> tuple[int, Initiative] | None:
     """Loyihani FAQAT ID bo'yicha topadi. Qaytaradi: (o'rin, yozuv) yoki None."""
     for index, item in enumerate(items):

@@ -39,6 +39,10 @@ TEXT_MUTED = "#8A8A8A"
 TEXT_HEADER = "#6B6B6B"
 TEXT_DIFF = "#3D3D3D"      # bizdan pastdagilarning "Farq" ustuni
 OUR_ROW_BG = "#FAFAFA"
+CUTOFF = "#D14343"     # budjet chegarasi chizig'i
+
+#: Chegaradan keyin nechta "sig'magan" loyiha ko'rsatiladi
+BELOW_CUTOFF = 2
 
 # --- O'lchamlar (1x, keyin SCALE ga ko'paytiriladi) ---
 SCALE = 2                  # retina: 2x chizib, so'ng 1x ga siqiladi
@@ -60,6 +64,9 @@ class Row:
     votes: int
     diff: int | None       # None = bu biz
     is_us: bool = False
+    #: Shu qatordan keyin budjet tugaydi — jadvalda qizil chiziq chiziladi.
+    #: G'oliblar soni budjetga qarab o'zgaradi (26.08.2026 da 15 -> 19 bo'ldi).
+    cutoff_after: bool = False
 
 
 def _font(bold: bool, size: int) -> ImageFont.FreeTypeFont:
@@ -206,7 +213,10 @@ def render(rows: list[Row], timestamp: str, district: str) -> bytes:
         if row.is_us:
             ld.rectangle([0, y0, t_width, y0 + ROW_H * s], fill=OUR_ROW_BG)
         if i > 0:
-            ld.line([(0, y0), (t_width, y0)], fill=SEPARATOR, width=max(1, s // 2))
+            prev_cut = rows[i - 1].cutoff_after
+            ld.line([(0, y0), (t_width, y0)],
+                    fill=CUTOFF if prev_cut else SEPARATOR,
+                    width=max(2, s) if prev_cut else max(1, s // 2))
 
     # Sarlavha qatori matni
     ox = t_left  # layer ichidagi koordinatalar uchun ofset
@@ -264,7 +274,7 @@ def _text_h(draw: ImageDraw.ImageDraw, text: str, font) -> int:
     return box[3] - box[1]
 
 
-def build_rows(items, our_id: str, top_n: int) -> list[Row]:
+def build_rows(items, our_id: str, top_n: int, winners: int | None = None) -> list[Row]:
     """
     Skreyperdan kelgan (ovoz bo'yicha saralangan) ro'yxatdan jadval qatorlarini
     yasaydi. Agar bizning loyiha TOP-N dan tashqarida bo'lsa, u oxiriga qo'shiladi.
@@ -279,9 +289,18 @@ def build_rows(items, our_id: str, top_n: int) -> list[Row]:
         diff = None if is_us else (our_votes - it.votes if our_votes is not None else 0)
         return Row(rank=i + 1, name=names[i], votes=it.votes, diff=diff, is_us=is_us)
 
-    rows = [make(i) for i in range(min(top_n, len(items)))]
-    if our_index is not None and our_index >= top_n:
+    # Budjetga sig'adigan hamma loyiha ko'rinsin, ustiga chegaradan keyingi
+    # ikkitasi ham — kim sig'may qolgani ko'rinib tursin.
+    shown = max(top_n, winners + BELOW_CUTOFF) if winners else top_n
+    shown = min(shown, len(items))
+
+    rows = [make(i) for i in range(shown)]
+    if our_index is not None and our_index >= shown:
         rows.append(make(our_index))
+
+    # Chegara chizig'i — oxirgi g'olibdan keyin
+    if winners and 0 < winners < len(rows):
+        rows[winners - 1].cutoff_after = True
     return rows
 
 
