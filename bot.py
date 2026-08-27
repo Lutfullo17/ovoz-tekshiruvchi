@@ -141,7 +141,7 @@ def _neighbour(items, rank: int, deltas: dict, offset: int, our) -> dict | None:
     }
 
 
-def facts_block(items, rank: int, our, deltas: dict) -> str:
+def facts_block(items, rank: int, our, deltas: dict, span: str = "oxirgi yarim soatda") -> str:
     """
     Caption'ning asosiy qismi — kodda hisoblangan aniq raqamlar.
 
@@ -203,7 +203,21 @@ def facts_block(items, rank: int, our, deltas: dict) -> str:
     return "\n\n".join(blocks)
 
 
-def freshness_line(our_delta, deltas: dict, now: datetime) -> str:
+def _elapsed_phrase(since: datetime | None, now: datetime) -> str:
+    """"oxirgi yarim soatda" / "oxirgi 3 soatda" — haqiqiy oraliqqa qarab."""
+    if since is None:
+        return "oxirgi tekshiruvdan beri"
+    minutes = max(1, int((now - since).total_seconds() // 60))
+    if minutes < 45:
+        return "oxirgi yarim soatda"
+    hours = round(minutes / 60)
+    if hours < 24:
+        return f"oxirgi {hours} soatda"
+    return f"oxirgi {round(hours / 24)} kunda"
+
+
+def freshness_line(our_delta, deltas: dict, now: datetime,
+                   since: datetime | None = None) -> str:
     """
     Oxirgi qator: ma'lumot qachon olingani va nima o'zgargani.
 
@@ -213,19 +227,20 @@ def freshness_line(our_delta, deltas: dict, now: datetime) -> str:
     """
     stamp = now.strftime("%H:%M")
     head = f"🕘 {stamp} dagi holat"
+    span = _elapsed_phrase(since, now)
 
     if our_delta is None or our_delta.d30 is None:
         return f"{head}\nBu birinchi tekshiruv — taqqoslash uchun oldingi ma'lumot yo'q"
 
     district = sum(d.d30 for d in deltas.values() if d.d30 is not None)
     if district == 0:
-        return f"{head}\nOxirgi yarim soatda butun tumanda birorta yangi ovoz bo'lmadi"
+        return f"{head}\n{span.capitalize()} butun tumanda birorta yangi ovoz bo'lmadi"
 
     ours = our_delta.d30
     if ours <= 0:
-        return (f"{head}\nOxirgi yarim soatda bizga yangi ovoz qo'shilmadi "
+        return (f"{head}\n{span.capitalize()} bizga yangi ovoz qo'shilmadi "
                 f"(butun tumanga {district} ta qo'shildi)")
-    return (f"{head}\nOxirgi yarim soatda bizga {ours} ta yangi ovoz qo'shildi "
+    return (f"{head}\n{span.capitalize()} bizga {ours} ta yangi ovoz qo'shildi "
             f"(butun tumanga {district} ta)")
 
 
@@ -391,7 +406,8 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
         lines.append(f"{arrow} O'RIN O'ZGARDI: {prev_rank} → {rank}")
 
     # Aniq raqamlar — kodda hisoblanadi, modelga bog'liq emas
-    lines.append(facts_block(items, rank, our, deltas))
+    span = _elapsed_phrase(store.previous_snapshot_time(snapshot_id), now)
+    lines.append(facts_block(items, rank, our, deltas, span))
 
     # Groq'dan 2 ta qisqa jumla — faqat aytadigan gap bo'lsa.
     # Hech narsa o'zgarmagan bo'lsa model bo'sh jumla to'qiydi, shuning uchun
@@ -406,7 +422,8 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
         log.info("O'zgarish yo'q — Groq tahlili o'tkazib yuborildi")
 
     # Yangilanish holati — "sayt o'zgarmadi" bilan "bot qotib qoldi" ni ajratish uchun
-    lines.append(freshness_line(our_delta, deltas, now))
+    lines.append(freshness_line(our_delta, deltas, now,
+                               store.previous_snapshot_time(snapshot_id)))
 
     caption = "\n\n".join(lines)
     if len(caption) > MAX_CAPTION:

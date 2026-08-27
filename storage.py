@@ -122,6 +122,21 @@ class Storage:
         """Kechasi o'sishini hisoblash uchun: (start dagi, end dagi) ovozlar."""
         return self._votes_at_or_before(start), self._votes_at_or_before(end)
 
+    def previous_snapshot_time(self, before_snapshot_id: int) -> datetime | None:
+        """
+        Oldingi snapshot qachon olingani.
+
+        Delta har doim ham 30 daqiqalik bo'lmaydi: bot to'xtab qolsa yoki
+        sayt ishlamasa oraliq soatlab cho'ziladi. Xabarda "oxirgi yarim
+        soatda" deb yozib qo'ymaslik uchun haqiqiy oraliq kerak.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT taken_at FROM snapshots WHERE id < ? ORDER BY id DESC LIMIT 1",
+                (before_snapshot_id,),
+            ).fetchone()
+            return datetime.fromisoformat(row["taken_at"]) if row else None
+
     def last_rank(self, project_id: str, before_snapshot_id: int) -> int | None:
         with self._conn() as conn:
             row = conn.execute(
