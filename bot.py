@@ -216,8 +216,14 @@ def _elapsed_phrase(since: datetime | None, now: datetime) -> str:
     return f"oxirgi {round(hours / 24)} kunda"
 
 
-def second_project_line(items, deltas: dict, span: str) -> str | None:
-    """Mahallaning ikkinchi loyihasi haqida qisqa qator (agar sozlangan bo'lsa)."""
+def second_project_line(items, deltas: dict, span: str,
+                        winners: int | None = None) -> str | None:
+    """
+    Mahallaning ikkinchi loyihasi haqida qisqa xabar — gap ko'rinishida.
+
+    Sarlavha o'sish sur'atiga qarab o'zgaradi: qimirlamagan loyiha bilan
+    chegaraga yaqinlashib qolgan loyiha bir xil o'qilmasligi kerak.
+    """
     pid = CONFIG.second_project_id
     if not pid or pid.lower() in ("none", "off", "yo'q"):
         return None
@@ -227,11 +233,33 @@ def second_project_line(items, deltas: dict, span: str) -> str | None:
         return None
 
     rank, it = found
-    line = f"👀 IKKINCHI LOYIHAMIZ\n{rank}-o'rin · {fmt_votes(it.votes)} ovoz"
     d = deltas.get(pid)
-    if d and d.d30:
-        line += f" ({span} +{d.d30})"
-    return line
+    gained = d.d30 if d and d.d30 else 0
+
+    if gained >= 200:
+        head = "🚀 IKKINCHI LOYIHAMIZ SHIDDAT BILAN KETMOQDA"
+    elif gained >= 50:
+        head = "📈 IKKINCHI LOYIHAMIZ TEZ KO'TARILMOQDA"
+    elif gained > 0:
+        head = "🌱 IKKINCHI LOYIHAMIZ ASTA O'SMOQDA"
+    else:
+        head = "😴 IKKINCHI LOYIHAMIZ QIMIRLAMADI"
+
+    sentences = [f"Hozir {rank}-o'rinda, {fmt_votes(it.votes)} ovoz to'plagan."]
+    if gained > 0:
+        sentences.append(f"{span.capitalize()} {fmt_votes(gained)} ta yangi ovoz oldi.")
+
+    if winners and 0 < winners <= len(items):
+        edge = items[winners - 1]
+        if rank <= winners:
+            sentences.append("G'oliblar ro'yxatiga kirdi!")
+        else:
+            need = edge.votes - it.votes + 1
+            sentences.append(
+                f"G'oliblik chegarasigacha yana {fmt_votes(need)} ovoz kerak."
+            )
+
+    return head + "\n" + "\n".join(sentences)
 
 
 def freshness_line(our_delta, deltas: dict, now: datetime,
@@ -427,7 +455,7 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     span = _elapsed_phrase(store.previous_snapshot_time(snapshot_id), now)
     lines.append(facts_block(items, rank, our, deltas, span))
 
-    second = second_project_line(items, deltas, span)
+    second = second_project_line(items, deltas, span, winners)
     if second:
         lines.append(second)
 
