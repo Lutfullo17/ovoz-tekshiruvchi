@@ -65,6 +65,10 @@ class Config:
     # DIQQAT: "Quyi Tegana ... H.Boyaqaro va Bobir ko'chalarini asfaltlash"
     # loyihasining haqiqiy publicId si — 055530954008 (saytdan tekshirilgan).
     project_id: str = field(default_factory=lambda: _str("PROJECT_ID", "055530954008"))
+    # Bir mahallada bir nechta loyiha bo'lishi mumkin. Ikkinchisi reytingda
+    # pastda bo'lib, TOP-N jadvaliga tushmaydi — shuning uchun xabarda
+    # alohida qator bilan ko'rsatiladi. Bo'sh bo'lsa qator chiqmaydi.
+    second_project_id: str = field(default_factory=lambda: _str("SECOND_PROJECT_ID"))
 
     # --- Manba (Ochiq budjet) ---
     board_id: int = field(default_factory=lambda: _int("BOARD_ID", 55))

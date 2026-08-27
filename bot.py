@@ -216,6 +216,24 @@ def _elapsed_phrase(since: datetime | None, now: datetime) -> str:
     return f"oxirgi {round(hours / 24)} kunda"
 
 
+def second_project_line(items, deltas: dict, span: str) -> str | None:
+    """Mahallaning ikkinchi loyihasi haqida qisqa qator (agar sozlangan bo'lsa)."""
+    pid = CONFIG.second_project_id
+    if not pid:
+        return None
+    found = find_project(items, pid)
+    if not found:
+        log.warning("Ikkinchi loyiha topilmadi: %s", pid)
+        return None
+
+    rank, it = found
+    line = f"👀 IKKINCHI LOYIHAMIZ\n{rank}-o'rin · {fmt_votes(it.votes)} ovoz"
+    d = deltas.get(pid)
+    if d and d.d30:
+        line += f" ({span} +{d.d30})"
+    return line
+
+
 def freshness_line(our_delta, deltas: dict, now: datetime,
                    since: datetime | None = None) -> str:
     """
@@ -408,6 +426,10 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     # Aniq raqamlar — kodda hisoblanadi, modelga bog'liq emas
     span = _elapsed_phrase(store.previous_snapshot_time(snapshot_id), now)
     lines.append(facts_block(items, rank, our, deltas, span))
+
+    second = second_project_line(items, deltas, span)
+    if second:
+        lines.append(second)
 
     # Groq'dan 2 ta qisqa jumla — faqat aytadigan gap bo'lsa.
     # Hech narsa o'zgarmagan bo'lsa model bo'sh jumla to'qiydi, shuning uchun
