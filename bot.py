@@ -219,7 +219,7 @@ def _elapsed_phrase(since: datetime | None, now: datetime) -> str:
 def second_project_line(items, deltas: dict, span: str) -> str | None:
     """Mahallaning ikkinchi loyihasi haqida qisqa qator (agar sozlangan bo'lsa)."""
     pid = CONFIG.second_project_id
-    if not pid:
+    if not pid or pid.lower() in ("none", "off", "yo'q"):
         return None
     found = find_project(items, pid)
     if not found:

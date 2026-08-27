@@ -67,8 +67,13 @@ class Config:
     project_id: str = field(default_factory=lambda: _str("PROJECT_ID", "055530954008"))
     # Bir mahallada bir nechta loyiha bo'lishi mumkin. Ikkinchisi reytingda
     # pastda bo'lib, TOP-N jadvaliga tushmaydi — shuning uchun xabarda
-    # alohida qator bilan ko'rsatiladi. Bo'sh bo'lsa qator chiqmaydi.
-    second_project_id: str = field(default_factory=lambda: _str("SECOND_PROJECT_ID"))
+    # alohida qator bilan ko'rsatiladi.
+    #
+    # Sukut qiymati PROJECT_ID kabi shu kampaniyaga bog'langan. Boshqa
+    # mahallani kuzatganda .env da SECOND_PROJECT_ID=none deb yozing —
+    # bazada bunday ID yo'q, shuning uchun qator chiqmaydi.
+    second_project_id: str = field(
+        default_factory=lambda: _str("SECOND_PROJECT_ID", "055522357008"))
 
     # --- Manba (Ochiq budjet) ---
     board_id: int = field(default_factory=lambda: _int("BOARD_ID", 55))
