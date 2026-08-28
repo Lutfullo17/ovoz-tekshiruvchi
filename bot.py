@@ -242,7 +242,29 @@ def second_report(items, deltas, winners, span, now) -> None:
 
     d = deltas.get(pid)
     gained = d.d30 if d and d.d30 else 0
-    blocks = [f"📍 BIZNING LOYIHA: {rank}-o'rin · {fmt_votes(it.votes)} ovoz"]
+    blocks = []
+
+    # Avval birinchi (asosiy) loyihaning holati — bu guruh ham uni kuzatadi
+    main = find_project(items, CONFIG.project_id)
+    if main:
+        m_rank, m_it = main
+        if m_rank == 1:
+            m_head = "🏆 BIRINCHI LOYIHAMIZ PESHQADAM!"
+        elif m_rank <= 3:
+            m_head = "🥇 BIRINCHI LOYIHAMIZ OLDINGI QATORDA"
+        elif winners and m_rank <= winners:
+            m_head = "✅ BIRINCHI LOYIHAMIZ G'OLIBLAR ICHIDA"
+        else:
+            m_head = "⚠️ BIRINCHI LOYIHAMIZ CHEGARADAN TASHQARIDA"
+
+        m_lines = [m_head, f"{m_rank}-o'rin · {fmt_votes(m_it.votes)} ovoz"]
+        m_d = deltas.get(CONFIG.project_id)
+        if m_d and m_d.d30:
+            m_lines.append(f"{span.capitalize()} {fmt_votes(m_d.d30)} ta ovoz oldi.")
+        blocks.append("\n".join(m_lines))
+
+    blocks.append("➖➖➖➖➖➖➖➖➖➖")
+    blocks.append(f"📍 IKKINCHI LOYIHAMIZ\n{rank}-o'rin · {fmt_votes(it.votes)} ovoz")
 
     ahead = items[max(0, rank - 3):rank - 1]
     if ahead:
