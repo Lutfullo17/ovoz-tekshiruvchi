@@ -159,6 +159,39 @@ def _truncate(draw: ImageDraw.ImageDraw, text: str, font, max_px: int) -> str:
     return text.rstrip() + ellipsis
 
 
+def build_rows_around(items, focus_id: str, winners: int | None = None,
+                      before: int = 4, after: int = 3) -> list[Row]:
+    """
+    Reytingning bir qismini — belgilangan loyiha atrofidagi qatorlarni qaytaradi.
+
+    TOP-N jadvali reytingda pastda turgan loyiha uchun foydasiz: u yerda
+    o'zi ham, raqiblari ham ko'rinmaydi. Bu funksiya o'sha loyihani markazga
+    olib, uning yuqorisidagi va pastidagi qo'shnilarini ko'rsatadi.
+    """
+    names = disambiguate([it.quarter for it in items])
+    focus = next((i for i, it in enumerate(items) if it.project_id == focus_id), None)
+    if focus is None:
+        return []
+
+    focus_votes = items[focus].votes
+    start = max(0, focus - before)
+    end = min(len(items), focus + after + 1)
+
+    rows = []
+    for i in range(start, end):
+        it = items[i]
+        is_focus = i == focus
+        rows.append(Row(
+            rank=i + 1,
+            name=names[i],
+            votes=it.votes,
+            diff=None if is_focus else focus_votes - it.votes,
+            is_us=is_focus,
+            cutoff_after=bool(winners) and i + 1 == winners,
+        ))
+    return rows
+
+
 def render(rows: list[Row], timestamp: str, district: str) -> bytes:
     """Jadval rasmini chizadi va PNG baytlarini qaytaradi."""
     f_title = _font(True, 21)

@@ -56,6 +56,9 @@ class Config:
     # Texnik ogohlantirishlar shu yerga ketadi — hisobot guruhiga EMAS.
     # Bo'sh qoldirilsa ogohlantirish umuman yuborilmaydi.
     admin_chat_id: str = field(default_factory=lambda: _str("ADMIN_CHAT_ID"))
+    # Ikkinchi loyihaga qaratilgan hisobot shu guruhga boradi.
+    # Bo'sh bo'lsa ikkinchi hisobot umuman yuborilmaydi.
+    second_chat_id: str = field(default_factory=lambda: _str("SECOND_CHAT_ID"))
 
     # --- Groq ---
     groq_api_key: str = field(default_factory=lambda: _str("GROQ_API_KEY"))

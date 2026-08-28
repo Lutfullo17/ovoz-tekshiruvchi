@@ -219,6 +219,34 @@ check("admin_chat_id" in bot.notify_admin.__code__.co_names,
 check("chat_id" in bot.send_photo.__code__.co_names,
       "send_photo hisobotni CHAT_ID ga yuboradi")
 
+# ------------------------------------------- ikkinchi loyiha hisoboti
+from renderer import build_rows_around
+
+_ar = [make(f"R{i}", f"Mahalla {i}", 5000 - i * 100) for i in range(30)]
+_ar[20] = make("FOCUS", "Қуйи Тегана", 2900)
+_ar.sort(key=lambda x: x.votes, reverse=True)
+_focus_rank = next(i for i, x in enumerate(_ar, 1) if x.project_id == "FOCUS")
+
+_around = build_rows_around(_ar, "FOCUS", winners=19)
+check(any(r.is_us for r in _around), "build_rows_around: markazdagi loyiha belgilangan")
+check(_around[0].rank < _focus_rank < _around[-1].rank,
+      "build_rows_around: yuqorisi va pastidagi qatorlar bor")
+check(any(r.cutoff_after for r in _around) or _focus_rank > 23,
+      "build_rows_around: chegara chizig'i oynaga tushsa ko'rsatiladi")
+check(build_rows_around(_ar, "YOQ") == [],
+      "build_rows_around: mavjud bo'lmagan ID -> bo'sh ro'yxat")
+_no_w = build_rows_around(_ar, "FOCUS", winners=None)
+check(not any(r.cutoff_after for r in _no_w),
+      "build_rows_around: budjet noma'lum bo'lsa chegara chizilmaydi")
+
+# Ikkinchi hisobot faqat o'z guruhiga ketishi kerak
+import inspect
+_src = inspect.getsource(bot.second_report)
+check("CONFIG.second_chat_id" in _src and "CONFIG.chat_id" not in _src,
+      "second_report faqat SECOND_CHAT_ID ga yuboradi")
+check("if not CONFIG.second_chat_id" in _src,
+      "second_report: guruh sozlanmagan bo'lsa yubormaydi")
+
 # ------------------------------------------------------------------ natija
 print()
 failed = [label for ok, label in results if not ok]

@@ -26,7 +26,7 @@ import httpx
 
 import ai
 from config import CONFIG, TASHKENT
-from renderer import build_rows, fmt_votes, render, to_latin
+from renderer import build_rows, build_rows_around, fmt_votes, render, to_latin
 from scraper import ScrapeError, fetch_budget, fetch_sorted, find_project, winners_count
 from storage import Storage
 
@@ -73,15 +73,16 @@ def setup_logging() -> None:
 # Telegram
 # --------------------------------------------------------------------------
 
-def send_photo(png: bytes, caption: str) -> bool:
-    if not CONFIG.bot_token or not CONFIG.chat_id:
-        log.error("BOT_TOKEN yoki CHAT_ID sozlanmagan — yuborilmadi")
+def send_photo(png: bytes, caption: str, chat_id: str | None = None) -> bool:
+    chat_id = chat_id or CONFIG.chat_id
+    if not CONFIG.bot_token or not chat_id:
+        log.error("BOT_TOKEN yoki chat sozlanmagan — yuborilmadi")
         return False
     url = TELEGRAM_API.format(token=CONFIG.bot_token, method="sendPhoto")
     try:
         resp = httpx.post(
             url,
-            data={"chat_id": CONFIG.chat_id, "caption": caption[:MAX_CAPTION]},
+            data={"chat_id": chat_id, "caption": caption[:MAX_CAPTION]},
             files={"photo": ("reyting.png", png, "image/png")},
             timeout=CONFIG.request_timeout,
         )
@@ -89,7 +90,8 @@ def send_photo(png: bytes, caption: str) -> bool:
             # Telegram sababni javob tanasida yozadi — log'da ko'rinsin
             log.error("Telegram javobi: %s", resp.text[:300])
         resp.raise_for_status()
-        log.info("Rasm yuborildi (%d bayt, caption %d belgi)", len(png), len(caption))
+        log.info("Rasm yuborildi -> %s (%d bayt, caption %d belgi)",
+                 chat_id, len(png), len(caption))
         return True
     except Exception as exc:  # noqa: BLE001
         log.error("Telegramga yuborishda xato: %s", exc)
@@ -214,6 +216,67 @@ def _elapsed_phrase(since: datetime | None, now: datetime) -> str:
     if hours < 24:
         return f"oxirgi {hours} soatda"
     return f"oxirgi {round(hours / 24)} kunda"
+
+
+def second_report(items, deltas, winners, span, now) -> None:
+    """
+    Ikkinchi loyihaga qaratilgan alohida hisobot — o'z guruhiga.
+
+    Asosiy hisobotdan farqi: jadval reytingning yuqorisini emas, shu
+    loyiha atrofidagi qatorlarni ko'rsatadi — kim oldinda, kim ortda.
+    """
+    if not CONFIG.second_chat_id:
+        return
+    pid = CONFIG.second_project_id
+    found = find_project(items, pid)
+    if not found:
+        log.warning("Ikkinchi loyiha topilmadi, hisobot yuborilmadi: %s", pid)
+        return
+
+    rank, it = found
+    rows = build_rows_around(items, pid, winners=winners)
+    if not rows:
+        return
+
+    png = render(rows, now.strftime('%d.%m.%Y, %H:%M'), CONFIG.district_label)
+
+    d = deltas.get(pid)
+    gained = d.d30 if d and d.d30 else 0
+    blocks = [f"📍 BIZNING LOYIHA: {rank}-o'rin · {fmt_votes(it.votes)} ovoz"]
+
+    ahead = items[max(0, rank - 3):rank - 1]
+    if ahead:
+        lines = [f"{to_latin(x.quarter)} — {fmt_votes(x.votes - it.votes)} ovoz ko'p"
+                 for x in reversed(ahead)]
+        blocks.append('⬆️ BIZDAN OLDINDA\n' + '\n'.join(lines))
+
+    behind = items[rank:rank + 2]
+    if behind:
+        lines = [f"{to_latin(x.quarter)} — {fmt_votes(it.votes - x.votes)} ovoz kam"
+                 for x in behind]
+        blocks.append('⬇️ BIZDAN ORTDA\n' + '\n'.join(lines))
+
+    if winners and 0 < winners <= len(items):
+        edge = items[winners - 1]
+        if rank <= winners:
+            blocks.append(
+                f"✅ G'OLIBLAR ICHIDAMIZ\n"
+                f"Chegara — {winners}-o'rin. Pastdagidan "
+                f"{fmt_votes(it.votes - edge.votes)} ovoz oldinamiz.")
+        else:
+            need = edge.votes - it.votes + 1
+            blocks.append(
+                f"🎯 G'OLIBLIKKACHA\n"
+                f"Yana {fmt_votes(need)} ovoz kerak "
+                f"({winners}-o'ringa chiqish uchun).")
+
+    if gained > 0:
+        blocks.append(f"{span.capitalize()} {fmt_votes(gained)} ta yangi ovoz oldik.")
+    else:
+        blocks.append(f"{span.capitalize()} yangi ovoz qo'shilmadi.")
+
+    blocks.append(f"🕘 {now.strftime('%H:%M')} dagi holat")
+    send_photo(png, '\n\n'.join(blocks), chat_id=CONFIG.second_chat_id)
 
 
 def second_project_line(items, deltas: dict, span: str,
@@ -482,6 +545,11 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     # ---- 8. Yuborish ----
     if send:
         send_photo(png, caption)
+        # Ikkinchi loyihaga qaratilgan hisobot — o'z guruhiga
+        try:
+            second_report(items, deltas, winners, span, now)
+        except Exception as exc:  # noqa: BLE001 — asosiy hisobot buzilmasin
+            log.error("Ikkinchi hisobot yuborilmadi: %s", exc)
     else:
         print("\n--- CAPTION ---")
         print(caption)
