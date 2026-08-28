@@ -225,7 +225,8 @@ def second_report(items, deltas, winners, span, now) -> None:
     Asosiy hisobotdan farqi: jadval reytingning yuqorisini emas, shu
     loyiha atrofidagi qatorlarni ko'rsatadi — kim oldinda, kim ortda.
     """
-    if not CONFIG.second_chat_id:
+    chat = CONFIG.second_chat_id
+    if not chat or chat.lower() in ("none", "off", "yo'q"):
         return
     pid = CONFIG.second_project_id
     found = find_project(items, pid)

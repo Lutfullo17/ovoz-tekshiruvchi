@@ -244,7 +244,7 @@ import inspect
 _src = inspect.getsource(bot.second_report)
 check("CONFIG.second_chat_id" in _src and "CONFIG.chat_id" not in _src,
       "second_report faqat SECOND_CHAT_ID ga yuboradi")
-check("if not CONFIG.second_chat_id" in _src,
+check("CONFIG.second_chat_id" in _src and "return" in _src.split("chat =")[1][:200],
       "second_report: guruh sozlanmagan bo'lsa yubormaydi")
 
 # ------------------------------------------------------------------ natija

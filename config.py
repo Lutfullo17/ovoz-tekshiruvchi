@@ -58,7 +58,11 @@ class Config:
     admin_chat_id: str = field(default_factory=lambda: _str("ADMIN_CHAT_ID"))
     # Ikkinchi loyihaga qaratilgan hisobot shu guruhga boradi.
     # Bo'sh bo'lsa ikkinchi hisobot umuman yuborilmaydi.
-    second_chat_id: str = field(default_factory=lambda: _str("SECOND_CHAT_ID"))
+    # Sukut qiymati shu kampaniyaga bog'langan (PROJECT_ID kabi), chunki
+    # .env gitignore da — git pull uni telefon/serverga olib bormaydi.
+    # O'chirish uchun .env da SECOND_CHAT_ID=none deb yozing.
+    second_chat_id: str = field(
+        default_factory=lambda: _str("SECOND_CHAT_ID", "-1001501027253"))
 
     # --- Groq ---
     groq_api_key: str = field(default_factory=lambda: _str("GROQ_API_KEY"))
