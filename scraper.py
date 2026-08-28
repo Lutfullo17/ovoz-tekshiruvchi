@@ -62,6 +62,10 @@ class Initiative:
     amount: int
     district: str
     description: str
+    #: Sherikchilik asosida, ovoz berishdan oldin g'olib bo'lgan loyiha.
+    #: Bunday loyihalar ovozda qatnashmaydi, lekin puli tuman budjetidan
+    #: ushlanadi — ya'ni ovoz g'oliblariga qoladigan mablag'ni kamaytiradi.
+    is_partnership: bool = False
 
     @classmethod
     def from_api(cls, item: dict) -> "Initiative":
@@ -72,6 +76,7 @@ class Initiative:
             amount=int(item.get("grantedAmount") or 0),
             district=(item.get("districtName") or "").strip(),
             description=(item.get("description") or "").strip(),
+            is_partnership=bool(item.get("isPartnership")),
         )
 
 
@@ -249,12 +254,24 @@ def winners_count(items: list[Initiative], budget: int | None) -> int | None:
     Budjetga nechta loyiha sig'adi (ovoz bo'yicha yuqoridan pastga).
 
     G'oliblar reyting bo'yicha, mablag' tugaguncha aniqlanadi.
+
+    Sherikchilik loyihalari ovoz berishdan oldin g'olib bo'lgan, lekin
+    ularning puli ham shu tuman budjetidan ketadi (tekshirildi: barcha
+    viloyat budjetlari yig'indisi doskaning total_amount iga teng, ya'ni
+    sherikchilik uchun alohida jamg'arma ajratilmagan). Shuning uchun
+    ularning summasi budjetdan avval ayriladi.
     """
     if not budget:
         return None
+
+    committed = sum(it.amount for it in items if it.is_partnership)
+    available = budget - committed
+
     spent = 0
     for index, item in enumerate(items):
-        if spent + item.amount > budget:
+        if item.is_partnership:
+            continue          # allaqachon g'olib, ovozda qatnashmaydi
+        if spent + item.amount > available:
             return index
         spent += item.amount
     return len(items)
