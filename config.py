@@ -95,7 +95,7 @@ class Config:
     quiet_end: int = field(default_factory=lambda: _int("QUIET_END", 6))      # 06:00
 
     # --- Hisobot ---
-    top_n: int = field(default_factory=lambda: _int("TOP_N", 15))
+    top_n: int = field(default_factory=lambda: _int("TOP_N", 20))
 
     # --- Texnik ---
     max_retries: int = field(default_factory=lambda: _int("MAX_RETRIES", 3))

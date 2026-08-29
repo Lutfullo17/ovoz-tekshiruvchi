@@ -27,6 +27,9 @@ import httpx
 import ai
 from config import CONFIG, TASHKENT
 from renderer import build_rows, build_rows_around, fmt_votes, render, to_latin
+from report import build_caption
+from trend_data import collect
+from trend_render import render_trend
 from scraper import ScrapeError, fetch_budget, fetch_sorted, find_project, winners_count
 from storage import Storage
 
@@ -462,14 +465,19 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     winners = winners_count(items, budget)
     if winners:
         log.info("Budjet %s so'm -> %d ta g'olib", f"{budget:,}".replace(",", " "), winners)
-    rows = build_rows(items, CONFIG.project_id, CONFIG.top_n, winners=winners)
-    timestamp = now.strftime("%d.%m.%Y, %H:%M")
-    png = render(rows, timestamp, CONFIG.district_label)
+    # Trend jadvali: har bir loyihaning bir necha vaqtdagi holati yonma-yon.
+    # Oddiy reyting jadvali "kim harakat qilyapti" degan savolga javob
+    # bermasdi — bitta "oxirgi yarim soat" raqami chalkashtirardi.
+    trend_rows, trend_labels, meta = collect(items, now, winners, top=CONFIG.top_n)
+    png = render_trend(
+        trend_rows, trend_labels, now.strftime("%d.%m.%Y, %H:%M"),
+        f"Urgut tumani · {winners or '?'} ta g'olib · "
+        f"★ asosiy loyihamiz, ☆ ikkinchisi")
 
     if render_path:
         render_path.write_bytes(png)
         log.info("Rasm saqlandi: %s (%d bayt, %d qator)",
-                 render_path, len(png), len(rows))
+                 render_path, len(png), len(trend_rows))
 
     # --render-only: faqat dizaynni tekshirish — Groq va caption kerak emas
     if not analysis:
@@ -537,29 +545,11 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
         arrow = "⬆️" if rank < prev_rank else "⬇️"
         lines.append(f"{arrow} O'RIN O'ZGARDI: {prev_rank} → {rank}")
 
-    # Aniq raqamlar — kodda hisoblanadi, modelga bog'liq emas
+    # Trend: bir necha vaqt nuqtasi. Bitta "oxirgi yarim soat" raqami
+    # chalkashtirardi — ovozlar to'p-to'p kelgani uchun qaysi loyiha
+    # harakatda ekanini ajratib bo'lmasdi.
     span = _elapsed_phrase(store.previous_snapshot_time(snapshot_id), now)
-    lines.append(facts_block(items, rank, our, deltas, span))
-
-    second = second_project_line(items, deltas, span, winners)
-    if second:
-        lines.append(second)
-
-    # Groq'dan 2 ta qisqa jumla — faqat aytadigan gap bo'lsa.
-    # Hech narsa o'zgarmagan bo'lsa model bo'sh jumla to'qiydi, shuning uchun
-    # umuman chaqirilmaydi: faktlar bloki o'zi yetarli.
-    district_delta = sum(d.d30 for d in deltas.values() if d.d30 is not None)
-    first_run = our_delta is None or our_delta.d30 is None
-    if first_run or district_delta != 0:
-        analysis = ai.analyze(payload)
-        if analysis:
-            lines.append(ai.paragraphs(analysis))
-    else:
-        log.info("O'zgarish yo'q — Groq tahlili o'tkazib yuborildi")
-
-    # Yangilanish holati — "sayt o'zgarmadi" bilan "bot qotib qoldi" ni ajratish uchun
-    lines.append(freshness_line(our_delta, deltas, now,
-                               store.previous_snapshot_time(snapshot_id)))
+    lines.append(build_caption(meta, trend_labels, items, winners, now))
 
     caption = "\n\n".join(lines)
     if len(caption) > MAX_CAPTION:
@@ -568,6 +558,9 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
     # ---- 8. Yuborish ----
     if send:
         send_photo(png, caption)
+        # Adminga ham o'sha trend rasmi — u ikkala guruhni ham kuzatadi
+        if CONFIG.admin_chat_id and CONFIG.admin_chat_id != CONFIG.chat_id:
+            send_photo(png, caption, chat_id=CONFIG.admin_chat_id)
         # Ikkinchi loyihaga qaratilgan hisobot — o'z guruhiga
         try:
             second_report(items, deltas, winners, span, now)
