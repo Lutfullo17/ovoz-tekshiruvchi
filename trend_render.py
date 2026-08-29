@@ -53,7 +53,8 @@ RADIUS  = 12
 class TrendRow:
     rank: int
     name: str
-    past: list[int | None]      # eski nuqtalar, chapdan o'ngga
+    past: list[int | None]      # eski nuqtalar (hozircha ishlatilmaydi)
+    diff: int | None            # bizga nisbatan farq; None = bu biz
     now: int
     rate: float                 # ovoz/soat
     is_us: bool = False
@@ -103,15 +104,13 @@ def render_trend(rows: list[TrendRow], labels: list[str], timestamp: str,
     top   = (PAD + TITLE_H + GAP) * s
     width = right - left
 
-    n_past = len(labels)
     col_rank = left + 34 * s
     col_name = left + 50 * s
-    # o'ngdan chapga: sur'at, hozir, so'ng eski nuqtalar
-    col_rate  = right - 20 * s          # raqam, o'ngga tekislangan
-    col_label = right - 68 * s          # yorliq, o'ngga tekislangan
+    # o'ngdan chapga: sur'at, yorliq, hozirgi ovoz, bizga nisbatan farq
+    col_rate  = right - 20 * s
+    col_label = right - 68 * s
     col_now   = right - 150 * s
-    step      = 92 * s
-    col_past = [col_now - step * (n_past - i) for i in range(n_past)]
+    col_diff  = right - 250 * s
 
     layer = Image.new("RGB", (width, table_h * s), BG)
     ld = ImageDraw.Draw(layer)
@@ -136,9 +135,8 @@ def render_trend(rows: list[TrendRow], labels: list[str], timestamp: str,
     ox = left
     hy = (HEAD_H * s - 14 * s) // 2
     ld.text((col_name - ox, hy), "MAHALLA", font=f_head, fill=INK_SOFT)
-    for i, lab in enumerate(labels):
-        ld.text((col_past[i] - ox, hy), lab, font=f_head, fill=INK_SOFT, anchor="ra")
-    ld.text((col_now - ox, hy), "HOZIR", font=f_head, fill=INK_SOFT, anchor="ra")
+    ld.text((col_diff - ox, hy), "FARQ", font=f_head, fill=INK_SOFT, anchor="ra")
+    ld.text((col_now - ox, hy), "OVOZ", font=f_head, fill=INK_SOFT, anchor="ra")
     ld.text((col_rate - ox, hy), "OVOZ/SOAT", font=f_head, fill=INK_SOFT, anchor="ra")
 
     for i, r in enumerate(rows):
@@ -156,10 +154,16 @@ def render_trend(rows: list[TrendRow], labels: list[str], timestamp: str,
             name += "  ☆"
         ld.text((col_name - ox, y), name, font=font, fill=INK)
 
-        for k, v in enumerate(r.past):
-            txt = fmt_votes(v) if v is not None else "—"
-            ld.text((col_past[k] - ox, y), txt, font=f_cell,
-                    fill=INK_SOFT if v is not None else LINE, anchor="ra")
+        # Farq — bizga nisbatan. Oldindagilar manfiy va qalin,
+        # ortdagilar musbat va oddiy: kim xavf ekani darrov ko'rinsin.
+        if r.diff is None:
+            ld.text((col_diff - ox, y), "BIZ", font=f_cell_b, fill=INK, anchor="ra")
+        elif r.diff < 0:
+            ld.text((col_diff - ox, y), f"{MINUS}{fmt_votes(-r.diff)}",
+                    font=f_cell_b, fill=INK, anchor="ra")
+        else:
+            ld.text((col_diff - ox, y), f"+{fmt_votes(r.diff)}",
+                    font=f_cell, fill=INK_MID, anchor="ra")
 
         ld.text((col_now - ox, y), fmt_votes(r.now), font=font, fill=INK, anchor="ra")
 

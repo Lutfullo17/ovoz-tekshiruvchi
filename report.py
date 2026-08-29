@@ -28,6 +28,58 @@ def _block(title: str, m: dict, labels: list[str]) -> str:
     return "\n".join(lines)
 
 
+def build_group_caption(meta: dict, items, winners: int | None, now) -> str:
+    """
+    Katta guruh uchun — xotirjam ohangda.
+
+    O'rin obro' masalasi, pul emas: budjetga sig'gan har bir loyiha o'z
+    summasini to'liq oladi, 1-o'rinda ham, 19-o'rinda ham. Guruhda vahima
+    tarqalmasligi uchun buni har xabarda aniq yozib qo'yamiz. Haqiqiy xavf
+    faqat bitta — chegaradan chiqib qolish, shuning uchun zapas ko'rsatiladi.
+    """
+    ours = meta.get(CONFIG.project_id)
+    if not ours or not winners:
+        return ""
+
+    edge = items[winners - 1]
+    head = ("✅ LOYIHAMIZ G'OLIBLAR ICHIDA" if ours["rank"] <= winners
+            else "⚠️ LOYIHAMIZ CHEGARADAN TASHQARIDA")
+
+    blocks = [
+        head,
+        f"Urgut tumanida {winners} ta loyiha g'olib bo'ladi.\n"
+        f"Bizning loyiha — {ours['rank']}-o'rin, {fmt_votes(ours['now'])} ovoz",
+        "➖➖➖➖➖➖➖➖➖➖",
+    ]
+
+    # Eng muhim xabar: o'rin pul miqdorini o'zgartirmaydi
+    top_amount = items[0].amount
+    edge_amount = items[winners - 1].amount
+    blocks.append(
+        "O'RIN PULGA TA'SIR QILMAYDI\n"
+        f"1-o'rin:  {fmt_votes(top_amount)} so'm\n"
+        f"{winners}-o'rin: {fmt_votes(edge_amount)} so'm\n"
+        "\n"
+        "Nechanchi o'rinda bo'lsak ham, 19 talikka\n"
+        "kirsak mahallamiz to'liq mablag'ni oladi."
+    )
+
+    blocks.append("➖➖➖➖➖➖➖➖➖➖")
+
+    gap = ours["now"] - edge.votes
+    if gap >= 0:
+        blocks.append(
+            f"G'oliblik chegarasi — {winners}-o'rin ({fmt_votes(edge.votes)} ovoz)\n"
+            f"Loyihamiz chegaradan {fmt_votes(gap)} ovoz yuqorida")
+    else:
+        blocks.append(
+            f"G'oliblik chegarasi — {winners}-o'rin ({fmt_votes(edge.votes)} ovoz)\n"
+            f"Loyihamizga {fmt_votes(-gap)} ovoz yetmayapti")
+
+    blocks.append(f"🕘 {now:%d.%m.%Y %H:%M}")
+    return "\n\n".join(blocks)
+
+
 def build_caption(meta: dict, labels: list[str], items, winners: int | None,
                   now, movers: int = 4) -> str:
     """

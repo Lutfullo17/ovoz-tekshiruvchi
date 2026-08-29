@@ -45,7 +45,7 @@ def _at(db, moment: datetime) -> tuple[dict[str, Snap], datetime | None]:
 
 
 def collect(items, now: datetime, winners: int | None,
-            top: int = 20, points=POINTS):
+            top: int = 20, points=POINTS, mark_second: bool = True):
     """
     Qaytaradi: (rows, labels, meta)
 
@@ -83,13 +83,17 @@ def collect(items, now: datetime, winners: int | None,
     rows, meta = [], {}
 
     shown = list(items[:top])
-    for pid in (CONFIG.project_id, CONFIG.second_project_id):
+    wanted = ((CONFIG.project_id, CONFIG.second_project_id) if mark_second
+              else (CONFIG.project_id,))
+    for pid in wanted:
         if pid and not any(it.project_id == pid for it in shown):
             extra = next((it for it in items if it.project_id == pid), None)
             if extra:
                 shown.append(extra)
 
     index = {it.project_id: i + 1 for i, it in enumerate(items)}
+    ours = next((it for it in items if it.project_id == CONFIG.project_id), None)
+    our_votes = ours.votes if ours else 0
     for it in shown:
         rank = index[it.project_id]
         past = [d.get(it.project_id).votes if d.get(it.project_id) else None
@@ -100,10 +104,11 @@ def collect(items, now: datetime, winners: int | None,
             rank=rank,
             name=to_latin(it.quarter)[:20],
             past=past,
+            diff=None if it.project_id == CONFIG.project_id else our_votes - it.votes,
             now=it.votes,
             rate=rate,
             is_us=it.project_id == CONFIG.project_id,
-            is_us2=it.project_id == CONFIG.second_project_id,
+            is_us2=mark_second and it.project_id == CONFIG.second_project_id,
             cutoff_after=bool(winners) and rank == winners,
         ))
         meta[it.project_id] = {"past": past, "now": it.votes,

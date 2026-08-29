@@ -27,7 +27,7 @@ import httpx
 import ai
 from config import CONFIG, TASHKENT
 from renderer import build_rows, build_rows_around, fmt_votes, render, to_latin
-from report import build_caption
+from report import build_caption, build_group_caption
 from trend_data import collect
 from trend_render import render_trend
 from scraper import ScrapeError, fetch_budget, fetch_sorted, find_project, winners_count
@@ -556,9 +556,18 @@ def run_cycle(send: bool = True, render_path: Path | None = None,
         caption = caption[: MAX_CAPTION - 1].rstrip() + "…"
 
     # ---- 8. Yuborish ----
+    # Asosiy guruhda ikkinchi loyiha haqida gap ketmaydi: unga alohida
+    # guruh bor. Shuning uchun jadval ham ☆ belgisisiz chiziladi.
+    group_rows, group_labels, group_meta = collect(
+        items, now, winners, top=CONFIG.top_n, mark_second=False)
+    group_png = render_trend(
+        group_rows, group_labels, now.strftime("%d.%m.%Y, %H:%M"),
+        f"Urgut tumani · {winners or '?'} ta loyiha g'olib bo'ladi")
+    group_caption = build_group_caption(group_meta, items, winners, now) or caption
+
     if send:
-        send_photo(png, caption)
-        # Adminga ham o'sha trend rasmi — u ikkala guruhni ham kuzatadi
+        send_photo(group_png, group_caption)
+        # Adminga to'liq trend — ikkala loyiha va sur'atlar bilan
         if CONFIG.admin_chat_id and CONFIG.admin_chat_id != CONFIG.chat_id:
             send_photo(png, caption, chat_id=CONFIG.admin_chat_id)
         # Ikkinchi loyihaga qaratilgan hisobot — o'z guruhiga
