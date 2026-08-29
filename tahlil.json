@@ -1,0 +1,186 @@
+{
+ "now": "2026-08-30T00:21:30.610203+05:00",
+ "deadline_h": 47.62483049916667,
+ "rows": [
+  {
+   "nom": "Yuqori Sanchiqul",
+   "t1": 7696,
+   "t2": 8089,
+   "hozir": 8127,
+   "osish": 431,
+   "soatiga": 30.5,
+   "prognoz": 9578
+  },
+  {
+   "nom": "Navbog'",
+   "t1": 7614,
+   "t2": 7615,
+   "hozir": 7615,
+   "osish": 1,
+   "soatiga": 0.1,
+   "prognoz": 7618
+  },
+  {
+   "nom": "Qoratepa",
+   "t1": 6380,
+   "t2": 7321,
+   "hozir": 7327,
+   "osish": 947,
+   "soatiga": 66.9,
+   "prognoz": 10514
+  },
+  {
+   "nom": "Quyi guzar",
+   "t1": 5941,
+   "t2": 7120,
+   "hozir": 7326,
+   "osish": 1385,
+   "soatiga": 97.9,
+   "prognoz": 11988
+  },
+  {
+   "nom": "Quyi Tegana",
+   "t1": 7296,
+   "t2": 7310,
+   "hozir": 7325,
+   "osish": 29,
+   "soatiga": 2.0,
+   "prognoz": 7423
+  },
+  {
+   "nom": "Xalqobod",
+   "t1": 5981,
+   "t2": 6565,
+   "hozir": 7064,
+   "osish": 1083,
+   "soatiga": 76.5,
+   "prognoz": 10709
+  },
+  {
+   "nom": "Dehqonobod",
+   "t1": 6737,
+   "t2": 7012,
+   "hozir": 7061,
+   "osish": 324,
+   "soatiga": 22.9,
+   "prognoz": 8151
+  },
+  {
+   "nom": "Mang'itobod",
+   "t1": 6807,
+   "t2": 6978,
+   "hozir": 7015,
+   "osish": 208,
+   "soatiga": 14.7,
+   "prognoz": 7715
+  },
+  {
+   "nom": "Jozmon",
+   "t1": 6247,
+   "t2": 6835,
+   "hozir": 6993,
+   "osish": 746,
+   "soatiga": 52.7,
+   "prognoz": 9504
+  },
+  {
+   "nom": "Ukrach",
+   "t1": 6507,
+   "t2": 6677,
+   "hozir": 6872,
+   "osish": 365,
+   "soatiga": 25.8,
+   "prognoz": 8100
+  },
+  {
+   "nom": "Jayratepa",
+   "t1": 5965,
+   "t2": 6697,
+   "hozir": 6701,
+   "osish": 736,
+   "soatiga": 52.0,
+   "prognoz": 9178
+  },
+  {
+   "nom": "Yuqori Tegana",
+   "t1": 6060,
+   "t2": 6539,
+   "hozir": 6541,
+   "osish": 481,
+   "soatiga": 34.0,
+   "prognoz": 8160
+  },
+  {
+   "nom": "Bekravot",
+   "t1": 5809,
+   "t2": 6381,
+   "hozir": 6382,
+   "osish": 573,
+   "soatiga": 40.5,
+   "prognoz": 8311
+  },
+  {
+   "nom": "So'fi",
+   "t1": 5550,
+   "t2": 6176,
+   "hozir": 6215,
+   "osish": 665,
+   "soatiga": 47.0,
+   "prognoz": 8453
+  },
+  {
+   "nom": "Quyi Mo'minobod",
+   "t1": 4106,
+   "t2": 4981,
+   "hozir": 4988,
+   "osish": 882,
+   "soatiga": 62.3,
+   "prognoz": 7957
+  },
+  {
+   "nom": "Quyi Tegana 2",
+   "t1": 3250,
+   "t2": 4624,
+   "hozir": 4682,
+   "osish": 1432,
+   "soatiga": 101.2,
+   "prognoz": 9502
+  },
+  {
+   "nom": "Mirzaqishloq",
+   "t1": 3450,
+   "t2": 4396,
+   "hozir": 4492,
+   "osish": 1042,
+   "soatiga": 73.6,
+   "prognoz": 7999
+  },
+  {
+   "nom": "Xo'jabaland",
+   "t1": 3432,
+   "t2": 4281,
+   "hozir": 4284,
+   "osish": 852,
+   "soatiga": 60.2,
+   "prognoz": 7152
+  },
+  {
+   "nom": "Beshkon",
+   "t1": 2140,
+   "t2": 2515,
+   "hozir": 2526,
+   "osish": 386,
+   "soatiga": 27.3,
+   "prognoz": 3825
+  },
+  {
+   "nom": "Algar",
+   "t1": 1661,
+   "t2": 2244,
+   "hozir": 2246,
+   "osish": 585,
+   "soatiga": 41.3,
+   "prognoz": 4215
+  }
+ ]
+}
